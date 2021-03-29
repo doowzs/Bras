@@ -1,0 +1,15 @@
+﻿{
+  "general": {
+    "interval": 5
+  },
+  "bras": {
+    "username": "",
+    "password": ""
+  },
+  "dnspod": {
+    "id": "",
+    "token": "",
+    "domain": "",
+    "subdomain": ""
+  }
+}

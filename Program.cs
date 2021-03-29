@@ -1,45 +1,68 @@
 ﻿using System;
-using System.Linq;
-using System.Net;
-using System.Net.NetworkInformation;
-using System.Net.Sockets;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Timers;
+using Newtonsoft.Json;
 
 namespace Bras
 {
     class Program
     {
-        public static (IPAddress, IPAddress) GetBrasIpAddress()
+        static async Task Main(string[] args)
         {
-            var ipv4Address = IPAddress.None;
-            var ipv6Address = IPAddress.IPv6None;
-            var networkInterfaceList = NetworkInterface.GetAllNetworkInterfaces()
-                .Where(networkInterface => networkInterface.OperationalStatus == OperationalStatus.Up &&
-                                           networkInterface.GetIPProperties().GatewayAddresses.Count > 0)
-                .ToList();
-
-            foreach (var networkInterface in networkInterfaceList)
+            Config config = null;
+            await using (var stream = new FileStream("config.json", FileMode.Open, FileAccess.Read))
+            using (var reader = new StreamReader(stream))
             {
-                var informationList = networkInterface.GetIPProperties().UnicastAddresses
-                    .Where(information => !IPAddress.IsLoopback(information.Address)).ToList();
-                var isInterNetwork = informationList
-                    .Where(information => information.Address.AddressFamily == AddressFamily.InterNetwork)
-                    .Any(information => information.Address.ToString().StartsWith("172."));
-                if (isInterNetwork)
+                config = JsonConvert.DeserializeObject<Config>(await reader.ReadToEndAsync());
+                if (config == null)
                 {
-                    ipv4Address = informationList.FirstOrDefault(information =>
-                        information.Address.AddressFamily == AddressFamily.InterNetwork)?.Address;
-                    ipv6Address = informationList.FirstOrDefault(information =>
-                        information.Address.AddressFamily == AddressFamily.InterNetworkV6)?.Address;
-                    break;
+                    Console.WriteLine("Error: cannot parse config json.");
+                    Environment.Exit(1);
                 }
             }
 
-            return (ipv4Address, ipv6Address);
-        }
-        
-        static void Main(string[] args)
-        {
-            Console.WriteLine(GetBrasIpAddress());
+            Console.WriteLine($"Started at {DateTime.Now}");
+
+            Bras bras = new Bras(config.Bras);
+            DnsPod pod = new DnsPod(config.DnsPod);
+
+            await bras.Login();
+            Console.WriteLine("Bras login OK");
+            var (ipv4, ipv6) = await bras.GetIpAddresses();
+            Console.WriteLine($" -> IPv4: {ipv4}");
+            Console.WriteLine($" -> IPv6: {ipv6}");
+
+            var infoList = await pod.FetchRecordInfos();
+            Console.WriteLine("DnsPod query OK");
+            foreach (var (id, name, type) in infoList)
+            {
+                Console.WriteLine($" -> #{id} {name} {type}");
+            }
+
+            await pod.UpdateRecordInfos(ipv4.ToString(), ipv6.ToString());
+
+            var timer = new System.Timers.Timer(config.General.Interval * 60 * 1000);
+            timer.Elapsed += async (object sender, ElapsedEventArgs eventArgs) =>
+            {
+                Console.WriteLine($"Loop at {DateTime.Now}");
+                await bras.Login();
+                (ipv4, ipv6) = await bras.GetIpAddresses();
+                await pod.UpdateRecordInfos(ipv4.ToString(), ipv6.ToString());
+            };
+            Console.CancelKeyPress += (object sender, ConsoleCancelEventArgs eventArgs) =>
+            {
+                if (timer.Enabled) timer.Stop();
+                Console.WriteLine("Exited gracefully");
+                Environment.Exit(0);
+            };
+            timer.Start();
+            Console.WriteLine("Timer started, press Ctrl+C to interrupt");
+            while (true)
+            {
+                Thread.Sleep(1);
+            }
         }
     }
 }

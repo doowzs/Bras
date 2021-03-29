@@ -47,15 +47,15 @@ namespace Bras
         private HttpClient Client { get; set; }
         private string Token { get; set; }
         private string Domain { get; set; }
-        private string Name { get; set; }
+        private string SubDomain { get; set; }
         private List<RecordInfo> RecordInfoList { get; set; }
 
-        public DnsPod(string id, string token, string domain, string name)
+        public DnsPod(DnsPodConfig config)
         {
             Client = new HttpClient();
-            Token = id + "," + token;
-            Domain = domain;
-            Name = name;
+            Token = config.Id + "," + config.Token;
+            Domain = config.Domain;
+            SubDomain = config.SubDomain;
             RecordInfoList = new List<RecordInfo>();
         }
 
@@ -64,7 +64,9 @@ namespace Bras
         {
             var paramList = new List<string>
             {
-                extraParams, $"login_token={Token}", $"domain={Domain}", $"sub_domain={Name}", "lang=cn", "format=json"
+                extraParams,
+                $"login_token={Token}", $"domain={Domain}", $"sub_domain={SubDomain}",
+                "lang=cn", "format=json"
             };
             var paramString = string.Join('&', paramList.Where(s => !string.IsNullOrEmpty(s)));
             var content = new StringContent(paramString, Encoding.UTF8, "application/x-www-form-urlencoded");
@@ -88,7 +90,7 @@ namespace Bras
             return response;
         }
 
-        public async Task<List<string>> FetchRecordInfos()
+        public async Task<List<(string, string, string)>> FetchRecordInfos()
         {
             var response = await PostApiRequestAsync<RecordListResponse>(RecordListApi, string.Empty);
             if (response.Records == null)
@@ -97,10 +99,10 @@ namespace Bras
             }
 
             RecordInfoList = response.Records
-                .Where(info => info.Name == Name &&
+                .Where(info => info.Name == SubDomain &&
                                (info.Type == "A" || info.Type == "AAAA"))
                 .ToList();
-            return RecordInfoList.Select(info => info.Id).ToList();
+            return RecordInfoList.Select(info => (info.Id, info.Name, info.Type)).ToList();
         }
 
         public async Task UpdateRecordInfos(string ipv4Address, string ipv6Address)
@@ -121,13 +123,12 @@ namespace Bras
 
                 if (addr == info.Value)
                 {
-                    Console.WriteLine($"{type} is not changed, skipping");
                 }
                 else
                 {
-                    Console.WriteLine($"Updating {type} record to value {addr}");
+                    Console.WriteLine($" -> Updating record #{info.Id} (type {type}) to {addr}");
                     info.Value = addr;
-                    var response = await PostApiRequestAsync<BaseResponse>(RecordDdnsApi, info.ToParamString());
+                    await PostApiRequestAsync<BaseResponse>(RecordDdnsApi, info.ToParamString());
                 }
             }
         }

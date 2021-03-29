@@ -89,11 +89,11 @@ namespace Bras
         private string Username { get; set; }
         private string Password { get; set; }
 
-        public Bras(string username, string password)
+        public Bras(BrasConfig config)
         {
             Client = new HttpClient();
-            Username = username;
-            Password = password;
+            Username = config.Username;
+            Password = config.Password;
         }
 
         public async Task Login()
