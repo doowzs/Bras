@@ -34,22 +34,28 @@ namespace Bras
             Console.WriteLine($" -> IPv4: {ipv4}");
             Console.WriteLine($" -> IPv6: {ipv6}");
 
-            var infoList = await pod.FetchRecordInfos();
-            Console.WriteLine("DnsPod query OK");
-            foreach (var (id, name, type) in infoList)
+            if (pod.Enabled)
             {
-                Console.WriteLine($" -> #{id} {name} {type}");
-            }
+                var infoList = await pod.FetchRecordInfos();
+                Console.WriteLine("DnsPod query OK");
+                foreach (var (id, name, type) in infoList)
+                {
+                    Console.WriteLine($" -> #{id} {name} {type}");
+                }
 
-            await pod.UpdateRecordInfos(ipv4.ToString(), ipv6.ToString());
+                await pod.UpdateRecordInfos(ipv4.ToString(), ipv6.ToString());
+            }
 
             var timer = new System.Timers.Timer(config.General.Interval * 60 * 1000);
             timer.Elapsed += async (object sender, ElapsedEventArgs eventArgs) =>
             {
                 Console.WriteLine($"Loop at {DateTime.Now}");
                 await bras.Login();
-                (ipv4, ipv6) = await bras.GetIpAddresses();
-                await pod.UpdateRecordInfos(ipv4.ToString(), ipv6.ToString());
+                if (pod.Enabled)
+                {
+                    (ipv4, ipv6) = await bras.GetIpAddresses();
+                    await pod.UpdateRecordInfos(ipv4.ToString(), ipv6.ToString());
+                }
             };
             Console.CancelKeyPress += (object sender, ConsoleCancelEventArgs eventArgs) =>
             {

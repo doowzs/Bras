@@ -19,8 +19,11 @@ namespace Bras
         public string Token { get; set; }
         public string Domain { get; set; }
         public string SubDomain { get; set; }
+
+        public bool Enabled => !string.IsNullOrEmpty(Id) && !string.IsNullOrEmpty(Token) &&
+                               !string.IsNullOrEmpty(Domain) && !string.IsNullOrEmpty(SubDomain);
     }
-    
+
     public class Config
     {
         [JsonProperty("general")] public GeneralConfig General;

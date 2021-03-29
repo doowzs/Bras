@@ -49,10 +49,14 @@ namespace Bras
         private string Domain { get; set; }
         private string SubDomain { get; set; }
         private List<RecordInfo> RecordInfoList { get; set; }
+        public bool Enabled { get; set; }
 
         public DnsPod(DnsPodConfig config)
         {
             Client = new HttpClient();
+            Enabled = config.Enabled;
+            if (!Enabled) return;
+
             Token = config.Id + "," + config.Token;
             Domain = config.Domain;
             SubDomain = config.SubDomain;
@@ -92,6 +96,8 @@ namespace Bras
 
         public async Task<List<(string, string, string)>> FetchRecordInfos()
         {
+            if (!Enabled) return new List<(string, string, string)>();
+
             var response = await PostApiRequestAsync<RecordListResponse>(RecordListApi, string.Empty);
             if (response.Records == null)
             {
@@ -107,6 +113,7 @@ namespace Bras
 
         public async Task UpdateRecordInfos(string ipv4Address, string ipv6Address)
         {
+            if (!Enabled) return;
             if (RecordInfoList.Count == 0) return;
 
             List<KeyValuePair<string, string>> pairs = new List<KeyValuePair<string, string>>
